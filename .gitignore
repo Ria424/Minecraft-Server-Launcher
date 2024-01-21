@@ -1,0 +1,5 @@
+.venv/
+.vscode/
+export/
+pyinstaller/
+src/**/__pycache__/
