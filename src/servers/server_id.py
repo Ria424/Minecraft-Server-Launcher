@@ -1,0 +1,3 @@
+VANILLA = 0
+PAPER_MC = 1
+FABRIC = 2
