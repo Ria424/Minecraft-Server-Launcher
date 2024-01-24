@@ -49,16 +49,16 @@ def download(game_version: str, loader_version: str, installer_version: str, pat
 def ask():
     versions = get_versions()
 
-    print("\nHide unstable version? [y, n]: ")
+    console.print("\nHide unstable version? [y, n]: ")
     if console.ask_yes_no():
         game_versions = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["game"])))
     else:
         game_versions = tuple(map(lambda x: x["version"], versions["game"]))
-    print("\nVersion (Default: Latest):")
+    console.print("\nVersion (Default: Latest):\n")
     selected_game_version = game_versions[console.ask_iterable(game_versions, 1) - 1]
 
     loader_versions = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["loader"])))
-    print("\nFabric Loader Version (Default: Latest):")
+    console.print("\nFabric Loader Version (Default: Latest):\n")
     selected_loader_version = loader_versions[console.ask_iterable(loader_versions) - 1]
 
     selected_installer_version = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["installer"])))[0]
@@ -75,4 +75,4 @@ def create_server(game_version: str, loader_version: str, installer_version: str
         bat.write(content)
 
 def show_server_info(data: FabricData):
-    print("Software: Fabric\nGame Version: %s\nLoader Version: %s\nInstaller Version: %s\n" % (data.game_version, data.loader_version, data.installer_version,))
+    console.print("Software: Fabric\nGame Version: %s\nLoader Version: %s\nInstaller Version: %s\n" % (data.game_version, data.loader_version, data.installer_version,))

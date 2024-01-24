@@ -86,12 +86,12 @@ def create_server(project: str, version: str, build: int, path: str, xmx: int, x
 def ask(project_id: str):
     project = get_project(project_id)
 
-    print("\nVersion Group (Default: Latest):")
+    console.print("\nVersion Group (Default: Latest):\n")
     selected_version_group = project["version_groups"][console.ask_iterable(project["version_groups"]) - 1]
 
     versions = get_versions(project_id, selected_version_group)
 
-    print("\nVersion (Default: Latest):")
+    console.print("\nVersion (Default: Latest):\n")
     selected_version = versions[console.ask_iterable(versions) - 1]
 
     builds = get_builds(project_id, selected_version)
@@ -100,10 +100,10 @@ def ask(project_id: str):
     msg = "\nBuild [%d ~ %d] (Default: Latest): " % (oldest_build, latest_build,)
 
     def ask_build():
-        print(msg)
+        console.print(msg)
         build = builds[min(len(builds) - 1, max(0, console.ask(latest_build) - oldest_build))]
         if build["channel"] == "experimental":
-            print("\nThe selected build is experimental. Proceed? [y, n]: ")
+            console.print("\nThe selected build is experimental. Proceed? [y, n]: ")
             if not console.ask_yes_no():
                 build = ask_build()
         return build
@@ -112,4 +112,4 @@ def ask(project_id: str):
     return PaperMCData(project_id, selected_version, selected_build)
 
 def show_server_info(data: PaperMCData):
-    print("Software: %s\nGame Version: %s\nBuild: %d" % (data.project_id, data.game_version, data.build["build"],))
+    console.print("Software: %s\nGame Version: %s\nBuild: %d\n" % (data.project_id, data.game_version, data.build["build"],))
