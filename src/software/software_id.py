@@ -1,4 +1,0 @@
-VANILLA = 0
-PAPER_MC = 1
-FABRIC = 2
-FORGE = 3

@@ -1,10 +1,11 @@
 # https://github.com/FabricMC/fabric-meta#fabric-meta
 
+from dataclasses import dataclass
+from http.client import HTTPSConnection
 from json import loads as json_loads
 from typing import TypedDict
-from urllib.request import urlopen
 
-from src import console
+from src import console, server
 
 class GameVersionInfo(TypedDict):
     version: str
@@ -28,51 +29,55 @@ class Versions(TypedDict):
     loader: list[LoaderVersionInfo]
     installer: list[InstallerVersionInfo]
 
+@dataclass(repr=False, eq=False, slots=True)
 class FabricData:
-    __slots__ = ("versions", "game_version", "loader_version", "installer_version",)
+    versions: Versions
+    game_version: str
+    loader_version: str
+    installer_version: str
 
-    def __init__(self, versions: Versions, game_version: str, loader_version: str, installer_version: str):
-        self.versions = versions
-        self.game_version = game_version
-        self.loader_version = loader_version
-        self.installer_version = installer_version
+    def get_jar_filename(self):
+        return f"fabric-server-mc.{self.game_version}-loader.{self.loader_version}-launcher.{self.installer_version}.jar"
 
-def get_versions() -> Versions:
-    return json_loads(urlopen("https://meta.fabricmc.net/v2/versions").read())
+    def __repr__(self):
+        return f"Software: Fabric\nGame Version: {self.game_version}\nLoader Version: {self.loader_version}\nInstaller Version: {self.installer_version}\n"
 
-def download(game_version: str, loader_version: str, installer_version: str, path: str):
-    jar_filename = "fabric-server-mc.%s-loader.%s-launcher.%s.jar" % (game_version, loader_version, installer_version,)
+def connect():
+    return HTTPSConnection("meta.fabricmc.net")
+
+def get_versions(connection: HTTPSConnection) -> Versions:
+    connection.request("GET", "/v2/versions")
+    return json_loads(connection.getresponse().read())
+
+def download(connection: HTTPSConnection, data: FabricData, path: str):
+    jar_filename = data.get_jar_filename()
+    connection.request("GET", f"/v2/versions/loader/{data.game_version}/{data.loader_version}/{data.installer_version}/server/jar")
     with open(path + "/" + jar_filename, "wb") as jar:
-        jar.write(urlopen("https://meta.fabricmc.net/v2/versions/loader/%s/%s/%s/server/jar" % (game_version, loader_version, installer_version,)).read())
+        jar.write(connection.getresponse().read())
     return jar_filename
 
-def ask():
-    versions = get_versions()
+def cli():
+    connection = connect()
+    versions = get_versions(connection)
+    connection.close()
 
     console.print("\nHide unstable version? [y, n]: ")
-    if console.ask_yes_no():
-        game_versions = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["game"])))
-    else:
-        game_versions = tuple(map(lambda x: x["version"], versions["game"]))
-    console.print("\nVersion (Default: Latest):\n")
-    selected_game_version = game_versions[console.ask_iterable(game_versions, 1) - 1]
+    hide_stable_version = console.get_response_yes_or_no()
+    game_versions = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"] or not hide_stable_version, versions["game"])))
+
+    console.print("\nGame Version (Default: Latest):\n")
+    selected_game_version = console.get_response_sequence(game_versions, 1)
 
     loader_versions = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["loader"])))
-    console.print("\nFabric Loader Version (Default: Latest):\n")
-    selected_loader_version = loader_versions[console.ask_iterable(loader_versions) - 1]
+    console.print("\nLoader Version (Default: Latest):\n")
+    selected_loader_version = console.get_response_sequence(loader_versions, 1)
 
     selected_installer_version = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["installer"])))[0]
 
-    return FabricData(versions, selected_game_version, selected_loader_version, selected_installer_version,)
+    data = FabricData(versions, selected_game_version, selected_loader_version, selected_installer_version,)
 
-def create_server(game_version: str, loader_version: str, installer_version: str, path: str, xmx: int, xms: int = -1):
-    jar_filename = download(game_version, loader_version, installer_version, path)
-    with open(path + "/run.bat", "w") as bat:
-        content = "@echo off\njava"
-        if xms != -1:
-            content += " -Xms%dG" % xms
-        content += " -Xmx%dG -jar %s nogui\npause" % (xmx, jar_filename,)
-        bat.write(content)
-
-def show_server_info(data: FabricData):
-    console.print("Software: Fabric\nGame Version: %s\nLoader Version: %s\nInstaller Version: %s\n" % (data.game_version, data.loader_version, data.installer_version,))
+    xms, xmx = server.ask_memory()
+    server.show_server_info(repr(data), xms, xmx)
+    path = server.ask_server_path()
+    server.write_run_batch(path, xms, xmx, download(connection, data, path), True)
+    server.launch_server(path, data.game_version)

@@ -1,4 +1,10 @@
-from . import paper_mc
+from typing import OrderedDict
 
-paper_mc_projects = paper_mc.get_projects()
-softwares = (*paper_mc_projects, "fabric",)
+from . import fabric, forge, paper_mc, vanilla
+
+softwares = OrderedDict(
+    Vanilla=vanilla,
+    PaperMC=paper_mc,
+    Fabric=fabric,
+    Forge=forge
+)

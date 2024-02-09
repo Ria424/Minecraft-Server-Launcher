@@ -2,26 +2,27 @@
 It allows you to open Minecraft servers easily and quickly.
 
 ## Supported Servers
+- [Vanilla](https://www.minecraft.net)
 - [Paper](https://papermc.io/software/paper)
 - [Velocity](https://papermc.io/software/velocity)
 - [Waterfall](https://papermc.io/software/waterfall)
 - [Folia](https://papermc.io/software/folia)
 - Travertine
 - [Fabric](https://fabricmc.net)
+- [Forge](https://files.minecraftforge.net/net/minecraftforge/forge)
 
 ### To Be Supported
-- Vanilla
 - Spigot
-- Forge
+- Purpur
 
 ## How To Run Using Python
 ### From Source
-1. Install [Python](https://www.python.org/downloads) 3.11 or higher
+1. Install [Python](https://www.python.org/downloads)
 2. Download source code
 3. Run `main.py` from source code
 
 ## How To Compile
-1. Install [Python](https://www.python.org/downloads) 3.11 or higher
+1. Install [Python](https://www.python.org/downloads)
 2. Install latest version of [Pyinstaller](https://pypi.org/project/pyinstaller)
 3. Download source code
 4. Run `build.bat` from source code

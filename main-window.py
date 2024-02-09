@@ -14,6 +14,7 @@ server_list = Listbox(root, activestyle="none", height=0, takefocus=False, relie
 
 def add_server():
     add_server_btn.state(["disabled"])
+    launch_server_btn.state(["disabled"])
 
     select_software_window = SelectSoftware(root)
     software = select_software_window.get_software()
@@ -25,9 +26,22 @@ def add_server():
     server_list.insert(0, name + "-" + software + "-" + version)
 
     add_server_btn.state(["!disabled"])
+    launch_server_btn.state(["!disabled"])
+
+# def launch_server():
+#     add_server_btn.state(["disabled"])
+#     launch_server_btn.state(["disabled"])
+
+    
+
+#     add_server_btn.state(["!disabled"])
+#     launch_server_btn.state(["!disabled"])
 
 add_server_btn = Button(root, text="Add Server", takefocus=False, command=add_server)
 add_server_btn.pack()
+
+launch_server_btn = Button(root, text="Launch Server", takefocus=False)
+launch_server_btn.pack()
 
 server_list.pack(fill="x")
 
