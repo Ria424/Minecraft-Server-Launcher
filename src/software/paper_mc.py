@@ -106,7 +106,7 @@ def cli():
 
     game_versions = get_game_versions(connection, selected_project_id, selected_version_group)
     console.print("\nGame Version (Default: Latest):\n")
-    selected_game_version = console.get_response_sequence(game_versions, 1)
+    selected_game_version = console.get_response_sequence(game_versions)
 
     builds = get_builds(connection, selected_project_id, selected_game_version)
     connection.close()

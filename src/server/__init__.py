@@ -1,9 +1,10 @@
+from datetime import datetime
 from os import startfile, system
 from tkinter.filedialog import askdirectory
 
 from src import config, console
+from src.minecraft_version import ADDED_EULA
 from src.server import jvm_args
-from src.minecraft_version import ADDED_EULA, get_min
 
 def ask_memory():
     console.print("\nXms(G): ")
@@ -26,10 +27,10 @@ def show_server_info(info: str, xms: int, xmx: int):
 def ask_server_path():
     return askdirectory(mustexist=True, title="Select Server Directory.")
 
-def launch_server(path: str, game_version: str):
+def launch_server(path: str, released_time: datetime | None = None):
     console.print("\nLaunch server? [y, n]: ")
     if console.get_response_yes_or_no():
-        if game_version == ADDED_EULA or get_min(ADDED_EULA, game_version) == ADDED_EULA:
+        if released_time is not None and released_time >= ADDED_EULA:
             console.print("\nDo you agree with the EULA(https://www.minecraft.net/eula)? [y, n]: ")
             if console.get_response_yes_or_no():
                 with open(f"{path}/eula.txt", "w") as eula_txt:

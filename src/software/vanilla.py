@@ -50,12 +50,11 @@ def cli():
     connection = connect()
 
     version_manifest = get_version_manifest(connection)
-    supports_server_versions = filter(lambda x: datetime.fromisoformat(x["releaseTime"]) >= FIRST_SERVER_JAR_RELEASED, version_manifest["versions"])
-    stable_versions = tuple(filter(lambda x: x["type"] == "release", supports_server_versions))
+    supports_server_versions = tuple(filter(lambda x: datetime.fromisoformat(x["releaseTime"]) >= FIRST_SERVER_JAR_RELEASED, version_manifest["versions"]))
 
     console.print("\nGame Version (Default: Latest):\n")
-    selected_version_index = console.get_response_iterable(map(lambda x: x["id"], stable_versions), 1) - 1
-    selected_version = stable_versions[selected_version_index]
+    selected_version_index = console.get_response_iterable(map(lambda x: x["id"], supports_server_versions), 1) - 1
+    selected_version = tuple(supports_server_versions)[selected_version_index]
 
     xms, xmx = server.ask_memory()
     server.show_server_info(f"Software: Vanilla\nGame Version: {selected_version["id"]}\n", xms, xmx)
@@ -67,4 +66,4 @@ def cli():
     data_connection.close()
 
     server.write_run_batch(path, xms, xmx, jar_filename, True)
-    server.launch_server(path, selected_version["id"])
+    server.launch_server(path, datetime.fromisoformat(selected_version["releaseTime"]))

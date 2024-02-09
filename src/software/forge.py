@@ -1,6 +1,7 @@
 # https://files.minecraftforge.net/net/minecraftforge/forge
 
 from dataclasses import dataclass
+from datetime import datetime
 from http.client import HTTPSConnection
 from os import system
 from subprocess import Popen
@@ -8,7 +9,8 @@ from subprocess import Popen
 from bs4 import BeautifulSoup, SoupStrainer
 
 from src import console, server
-from src.minecraft_version import get_min
+from src.minecraft_version import get_minimum, to_vanilla_format
+from src.software import vanilla
 from src.util import url_path
 
 FIRST_INSTALLER_SUPPORT = "1.5.2"
@@ -57,7 +59,7 @@ def get_game_versions(connection: HTTPSConnection):
     soup = BeautifulSoup(connection.getresponse().read(), "html.parser", parse_only=sidebar_only)
     for tag_li in soup.select("ul > li > ul > li"):
         version = tag_li.get_text(strip=True)
-        if FIRST_INSTALLER_SUPPORT == version or get_min(FIRST_INSTALLER_SUPPORT, version) != version:
+        if FIRST_INSTALLER_SUPPORT == version or get_minimum(FIRST_INSTALLER_SUPPORT, version) != version:
             versions.append(version)
 
     return versions
@@ -131,4 +133,10 @@ def cli():
                 bat.write(content)
     else:
         server.write_run_batch(path, xms, xmx, f"minecraft_server.{data.game_version.replace("_pre", "-pre")}.jar", True)
-    server.launch_server(path, data.game_version)
+
+    # Check if version needs EULA
+    vanilla_connection = vanilla.connect()
+    manifest = vanilla.get_version_manifest(vanilla_connection)
+    vanilla_connection.close()
+    selected_game_version_released = tuple(filter(lambda x: x["id"] == to_vanilla_format(selected_game_version), manifest["versions"]))[0]["releaseTime"]
+    server.launch_server(path, datetime.fromisoformat(selected_game_version_released))

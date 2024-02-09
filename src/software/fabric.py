@@ -80,4 +80,4 @@ def cli():
     server.show_server_info(repr(data), xms, xmx)
     path = server.ask_server_path()
     server.write_run_batch(path, xms, xmx, download(connection, data, path), True)
-    server.launch_server(path, data.game_version)
+    server.launch_server(path)
