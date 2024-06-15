@@ -1,11 +1,11 @@
 # https://api.papermc.io/docs/swagger-ui/index.html?configUrl=/openapi/swagger-config
 
-from dataclasses import dataclass
 from http.client import HTTPSConnection
 from json import loads as json_loads
 from typing import Literal, TypedDict
 
 from src import config, console, server
+from src.util import constants
 
 class Project(TypedDict):
     project_id: str
@@ -34,39 +34,15 @@ class Build(TypedDict):
     changes: list[BuildChange]
     downloads: BuildDownloads
 
-@dataclass(repr=False, eq=False, slots=True)
-class PaperMCData:
-    project_id: str
-    game_version: str
-    build: Build
-
-    def get_jar_filename(self):
-        return f"{self.project_id}-{self.game_version}-{self.build["build"]}.jar"
-
-    def __repr__(self):
-        return f"Software: {self.project_id}\nGame Version: {self.game_version}\nBuild: {self.build["build"]}\n"
-
-# PROJECTS_URL = "https://api.papermc.io/v2/projects"
-# PROJECT_URL = PROJECTS_URL + "/%s"
-# VERSION_GROUP_URL = PROJECT_URL + "/version_group/%s"
-# BUILD_VERSIONS_URL = PROJECT_URL + "/versions/%s"
-# BUILDS_URL = BUILD_VERSIONS_URL + "/builds"
-# BUILD_URL = BUILDS_URL + "/%d"
-# DOWNLOAD_URL = BUILD_URL + "/downloads/%s"
-# JAR_FILENAME = "%s-%s-%d.jar"
-# JVM_ARGS = "java {xms} {xmx} -jar {jar} {nogui}"
-# JVM_ARG_PATTERN = {
-#     "xmx": "-Xmx%d{unit}",
-#     "xms": "-Xms%d{unit}",
-#     "nogui": "--nogui"
-# }
-
 def connect():
-    return HTTPSConnection("api.papermc.io")
+    return HTTPSConnection(constants.PAPERMC_API_DOMAIN)
 
 def get_projects(connection: HTTPSConnection) -> tuple[str, ...]:
     connection.request("GET", "/v2/projects")
     return json_loads(connection.getresponse().read())["projects"]
+
+# def get_projects():
+#     return ("paper", "waterfall", "velocity", "travertine", "folia",)
 
 def get_project(connection: HTTPSConnection, project: str) -> Project:
     connection.request("GET", f"/v2/projects/{project}")
@@ -84,9 +60,9 @@ def get_builds(connection: HTTPSConnection, project: str, version: str) -> list[
 #     connection.request("GET", f"/v2/projects/{project}/versions/{version}/builds/{build}")
 #     return json_loads(connection.getresponse().read())
 
-def download(connection: HTTPSConnection, data: PaperMCData, path: str):
-    jar_file_name = data.get_jar_filename()
-    connection.request("GET", f"/v2/projects/{data.project_id}/versions/{data.game_version}/builds/{data.build["build"]}/downloads/{jar_file_name}")
+def download(connection: HTTPSConnection, project_id: str, game_version: str, build: int, path: str):
+    jar_file_name = f"{project_id}-{game_version}-{build}.jar"
+    connection.request("GET", f"/v2/projects/{project_id}/versions/{game_version}/builds/{build}/downloads/{jar_file_name}")
     with open(path + "/" + jar_file_name, "wb") as jar:
         jar.write(connection.getresponse().read())
     return jar_file_name
@@ -109,7 +85,6 @@ def cli():
     selected_game_version = console.get_response_sequence(game_versions)
 
     builds = get_builds(connection, selected_project_id, selected_game_version)
-    connection.close()
 
     oldest_build = builds[0]["build"]
     latest_build = builds[-1]["build"]
@@ -125,10 +100,12 @@ def cli():
         return build
     selected_build = get_response_build()
 
-    data = PaperMCData(selected_project_id, selected_game_version, selected_build)
-
     xms, xmx = server.ask_memory()
-    server.show_server_info(repr(data), xms, xmx)
+    server.show_server_info(f"Software: {selected_project_id}\nGame Version: {selected_game_version}\nBuild: {selected_build["build"]}\n", xms, xmx)
     path = server.ask_server_path()
-    server.write_run_batch(path, xms, xmx, download(connection, data, path), True)
-    server.launch_server(path, data.game_version)
+
+    jar_path = download(connection, selected_project_id, selected_game_version, selected_build["build"], path)
+    connection.close()
+
+    server.write_run_batch(path, xms, xmx, jar_path, True)
+    server.launch_server(path)

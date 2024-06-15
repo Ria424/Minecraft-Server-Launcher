@@ -3,8 +3,8 @@ from os import startfile, system
 from tkinter.filedialog import askdirectory
 
 from src import config, console
-from src.minecraft_version import ADDED_EULA
 from src.server import jvm_args
+from src.util.constants import ADDED_EULA
 
 def ask_memory():
     console.print("\nXms(G): ")

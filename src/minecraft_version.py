@@ -1,7 +1,3 @@
-from datetime import datetime
-
-ADDED_EULA = datetime.fromisoformat("2014-05-14T13:29:23+00:00") # 1.7.10-pre1
-
 def get_minimum(a: str, b: str):
     a = a.split("-")[0].split("_")[0]
     b = b.split("-")[0].split("_")[0]
@@ -32,4 +28,11 @@ def get_minimum(a: str, b: str):
     return a
 
 def to_vanilla_format(version: str):
-    return version.replace("_", "-")
+    version = version.replace("_", "-")
+    split_version = version.split("-")[0].split(".")
+    if len(split_version) < 3:
+        return version
+    major, minor, patch = split_version
+    if patch == "0":
+        return f"{major}.{minor}"
+    return f"{major}.{minor}.{patch}"

@@ -1,11 +1,11 @@
 # https://github.com/FabricMC/fabric-meta#fabric-meta
 
-from dataclasses import dataclass
 from http.client import HTTPSConnection
 from json import loads as json_loads
 from typing import TypedDict
 
 from src import console, server
+from src.util import constants
 
 class GameVersionInfo(TypedDict):
     version: str
@@ -29,29 +29,19 @@ class Versions(TypedDict):
     loader: list[LoaderVersionInfo]
     installer: list[InstallerVersionInfo]
 
-@dataclass(repr=False, eq=False, slots=True)
-class FabricData:
-    versions: Versions
-    game_version: str
-    loader_version: str
-    installer_version: str
-
-    def get_jar_filename(self):
-        return f"fabric-server-mc.{self.game_version}-loader.{self.loader_version}-launcher.{self.installer_version}.jar"
-
-    def __repr__(self):
-        return f"Software: Fabric\nGame Version: {self.game_version}\nLoader Version: {self.loader_version}\nInstaller Version: {self.installer_version}\n"
-
 def connect():
-    return HTTPSConnection("meta.fabricmc.net")
+    return HTTPSConnection(constants.FABRIC_API_DOMAIN)
 
 def get_versions(connection: HTTPSConnection) -> Versions:
     connection.request("GET", "/v2/versions")
     return json_loads(connection.getresponse().read())
 
-def download(connection: HTTPSConnection, data: FabricData, path: str):
-    jar_filename = data.get_jar_filename()
-    connection.request("GET", f"/v2/versions/loader/{data.game_version}/{data.loader_version}/{data.installer_version}/server/jar")
+def get_jar_filename(game_version: str, loader_version: str, installer_version: str):
+    return f"fabric-server-mc.{game_version}-loader.{loader_version}-launcher.{installer_version}.jar"
+
+def download(connection: HTTPSConnection, game_version: str, loader_version: str, installer_version: str, path: str):
+    jar_filename = get_jar_filename(game_version, loader_version, installer_version)
+    connection.request("GET", f"/v2/versions/loader/{game_version}/{loader_version}/{installer_version}/server/jar")
     with open(path + "/" + jar_filename, "wb") as jar:
         jar.write(connection.getresponse().read())
     return jar_filename
@@ -59,7 +49,6 @@ def download(connection: HTTPSConnection, data: FabricData, path: str):
 def cli():
     connection = connect()
     versions = get_versions(connection)
-    connection.close()
 
     console.print("\nHide unstable version? [y, n]: ")
     hide_stable_version = console.get_response_yes_or_no()
@@ -74,10 +63,12 @@ def cli():
 
     selected_installer_version = tuple(map(lambda x: x["version"], filter(lambda x: x["stable"], versions["installer"])))[0]
 
-    data = FabricData(versions, selected_game_version, selected_loader_version, selected_installer_version,)
-
     xms, xmx = server.ask_memory()
-    server.show_server_info(repr(data), xms, xmx)
+    server.show_server_info(f"Software: Fabric\nGame Version: {selected_game_version}\nLoader Version: {selected_loader_version}\nInstaller Version: {selected_installer_version}\n", xms, xmx)
     path = server.ask_server_path()
-    server.write_run_batch(path, xms, xmx, download(connection, data, path), True)
+
+    jar_path = download(connection, selected_game_version, selected_loader_version, selected_installer_version, path)
+    connection.close()
+
+    server.write_run_batch(path, xms, xmx, jar_path, True)
     server.launch_server(path)
