@@ -1,23 +1,13 @@
-from contextlib import closing
-from http.client import HTTPConnection, HTTPSConnection
-from json import loads as json_loads
+from http.client import HTTPConnection
 from os.path import exists
 
-# class HTTPSConnectionWith(HTTPSConnection):
-#     def __enter__(self):
-#         return self
-
-#     def __exit__(self, exc_type, exc_val, exc_tb):
-#         self.close()
-
-def connect_with(host: str):
-    return closing(HTTPSConnection(host))
+from orjson import loads as json_loads
 
 def request(connection: HTTPConnection, url: str):
     connection.request("GET", url)
     return json_loads(connection.getresponse().read())
 
-def request_download(connection: HTTPSConnection, url: str, filepath: str):
+def request_download(connection: HTTPConnection, url: str, filepath: str):
     if not exists(filepath):
         connection.request("GET", url)
         with open(filepath, "wb") as f:

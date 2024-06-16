@@ -1,11 +1,12 @@
 # https://api.papermc.io/docs/swagger-ui/index.html?configUrl=/openapi/swagger-config
 
+from argparse import Namespace
 from http.client import HTTPSConnection
-from json import loads as json_loads
+from os.path import join as path_join
 from typing import Literal, TypedDict
 
-from src import config, console, server
-from src.util import constants
+from src import console, server
+from src.util import constants, request, request_download
 
 class Project(TypedDict):
     project_id: str
@@ -37,75 +38,65 @@ class Build(TypedDict):
 def connect():
     return HTTPSConnection(constants.PAPERMC_API_DOMAIN)
 
-def get_projects(connection: HTTPSConnection) -> tuple[str, ...]:
-    connection.request("GET", "/v2/projects")
-    return json_loads(connection.getresponse().read())["projects"]
+_get_project_cache = None
+def get_projects(connection: HTTPSConnection) -> list[str]:
+    global _get_project_cache
+    if _get_project_cache is None:
+        _get_project_cache = request(connection, "/v2/projects")["projects"]
+    return _get_project_cache
 
 # def get_projects():
 #     return ("paper", "waterfall", "velocity", "travertine", "folia",)
 
 def get_project(connection: HTTPSConnection, project: str) -> Project:
-    connection.request("GET", f"/v2/projects/{project}")
-    return json_loads(connection.getresponse().read())
+    return request(connection, f"/v2/projects/{project}")
 
-def get_game_versions(connection: HTTPSConnection, project: str, family: str) -> list[str]:
-    connection.request("GET", f"/v2/projects/{project}/version_group/{family}")
-    return json_loads(connection.getresponse().read())["versions"]
+# def get_game_versions_from_family(connection: HTTPSConnection, project: str, family: str) -> list[str]:
+#     return request(connection, f"/v2/projects/{project}/version_group/{family}")["versions"]
 
 def get_builds(connection: HTTPSConnection, project: str, version: str) -> list[Build]:
-    connection.request("GET", f"/v2/projects/{project}/versions/{version}/builds")
-    return json_loads(connection.getresponse().read())["builds"]
+    return request(connection, f"/v2/projects/{project}/versions/{version}/builds")["builds"]
 
 # def get_build(connection: HTTPSConnection, project: str, version: str, build: int) -> Build:
-#     connection.request("GET", f"/v2/projects/{project}/versions/{version}/builds/{build}")
-#     return json_loads(connection.getresponse().read())
+#     return request(connection, f"/v2/projects/{project}/versions/{version}/builds/{build}")
 
 def download(connection: HTTPSConnection, project_id: str, game_version: str, build: int, path: str):
     jar_file_name = f"{project_id}-{game_version}-{build}.jar"
-    connection.request("GET", f"/v2/projects/{project_id}/versions/{game_version}/builds/{build}/downloads/{jar_file_name}")
-    with open(path + "/" + jar_file_name, "wb") as jar:
-        jar.write(connection.getresponse().read())
+    request_download(connection, f"/v2/projects/{project_id}/versions/{game_version}/builds/{build}/downloads/{jar_file_name}", path_join(path, jar_file_name))
     return jar_file_name
 
-def cli():
+def cli(args: Namespace, path: str):
+    console.print("\rGathering required information...")
     connection = connect()
 
     projects = get_projects(connection)
-    console.print("\nProject (Default: paper):\n")
+    # console.print("\nProject (Default: paper):\n")
     # selected_project_id = projects[console.get_response_iterable(projects, projects.index(config.default_paper_mc_project) + 1) - 1]
-    selected_project_id = console.get_response_sequence(projects, projects.index(config.default_paper_mc_project) + 1)
 
-    project = get_project(connection, selected_project_id)
+    assert args.software in projects
+    project = get_project(connection, args.software)
 
-    console.print("\nVersion Group (Default: Latest):\n")
-    selected_version_group = project["version_groups"][console.get_response_iterable(project["version_groups"]) - 1]
+    selected_game_version = args.game_version if args.game_version in project["versions"] else project["versions"][-1]
 
-    game_versions = get_game_versions(connection, selected_project_id, selected_version_group)
-    console.print("\nGame Version (Default: Latest):\n")
-    selected_game_version = console.get_response_sequence(game_versions)
+    builds = get_builds(connection, project["project_id"], selected_game_version)
+    selected_build = builds[args.papermc_build]
 
-    builds = get_builds(connection, selected_project_id, selected_game_version)
+    xmx = args.xmx
+    xms = args.xms or xmx
+    # server.show_server_info(f"Software: {project["project_id"]}\nGame Version: {selected_game_version}\nBuild: {selected_build["build"]}\n", xms, xmx)
+    console.print(" Done\n")
 
-    oldest_build = builds[0]["build"]
-    latest_build = builds[-1]["build"]
-    msg = f"\nBuild [{oldest_build} ~ {latest_build}] (Default: Latest): "
-
-    def get_response_build() -> Build:
-        console.print(msg)
-        build = builds[min(len(builds) - 1, max(0, console.get_response(latest_build) - oldest_build))]
-        if build["channel"] == "experimental":
-            console.print("\nThe selected build is experimental. Proceed? [y, n]: ")
-            if not console.get_response_yes_or_no():
-                build = get_response_build()
-        return build
-    selected_build = get_response_build()
-
-    xms, xmx = server.ask_memory()
-    server.show_server_info(f"Software: {selected_project_id}\nGame Version: {selected_game_version}\nBuild: {selected_build["build"]}\n", xms, xmx)
-    path = server.ask_server_path()
-
-    jar_path = download(connection, selected_project_id, selected_game_version, selected_build["build"], path)
+    console.print("\rDownloading server jar file...")
+    jar_path = download(connection, project["project_id"], selected_game_version, selected_build["build"], path)
     connection.close()
+    console.print(" Done\n")
 
-    server.write_run_batch(path, xms, xmx, jar_path, True)
-    server.launch_server(path)
+    console.print("\rWriting batch file...")
+    server.write_batch(path, xms, xmx, jar_path, True)
+    console.print(" Done\n")
+
+    if args.agree_eula:
+        server.write_eula(path)
+
+    if args.launch:
+        server.launch(path)

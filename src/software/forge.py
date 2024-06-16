@@ -1,8 +1,9 @@
 # https://files.minecraftforge.net/net/minecraftforge/forge
 
+from argparse import Namespace
 from datetime import datetime
 from http.client import HTTPSConnection
-from os import system
+from os.path import join as path_join
 from subprocess import Popen
 from typing import OrderedDict
 
@@ -11,7 +12,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 from src import console, server
 from src.minecraft_version import get_minimum, to_vanilla_format
 from src.software import vanilla
-from src.util import connect_with, constants, url_path
+from src.util import constants, request_download, url_path
 
 ForgeVersions = tuple[OrderedDict[str, str], str | None]
 
@@ -60,9 +61,7 @@ def get_game_versions(connection: HTTPSConnection):
 
 def download(connection: HTTPSConnection, url: str, path: str):
     installer_jar = url[url.rindex("/") + 1:]
-    with open(f"{path}/{installer_jar}", "wb") as jar:
-        connection.request("GET", url_path(url))
-        jar.write(connection.getresponse().read())
+    request_download(connection, url_path(url), path_join(path, installer_jar))
     return installer_jar
 
 def install(installer: str, path: str):
@@ -71,49 +70,45 @@ def install(installer: str, path: str):
 
 # 1.17.1+
 def edit_jvm_args(path: str, args: str):
-    file_name = f"{path}/user_jvm_args.txt"
-    with open(file_name, "a") as f:
+    with open(path_join(path, "user_jvm_args.txt"), "a") as f:
         f.write(f"\n{args}")
 
-def cli():
+def cli(args: Namespace, path: str):
+    console.print("\rGathering required information...")
     connection = connect()
-    game_versions = get_game_versions(connection)
 
-    console.print("\nGame Version (Default: Latest):\n")
-    selected_game_version = console.get_response_sequence(game_versions, 1)
+    game_versions = get_game_versions(connection)
+    selected_game_version_index = game_versions.index(args.game_version) if args.game_version is not None else 0
+    selected_game_version = game_versions[selected_game_version_index]
 
     loader_version_urls, recommended = get_versions(connection, selected_game_version, "Installer")
     connection.close()
 
     loader_versions = tuple(loader_version_urls)
 
-    def get_text(i: int, element: str):
-        text = "[%d] %s"
-        if i == 1:
-            text += " (Latest)"
-        if element == recommended:
-            text += " (Recommended)"
-        return f"{text}\n"
-
+    default_loader_version_index = 0
     if recommended is not None:
-        default_version_index = loader_versions.index(recommended)
-        console.print("\nLoader Version (Default: Recommended):\n")
-    else:
-        default_version_index = 0
-        console.print("\nLoader Version (Default: Latest):\n")
+        default_loader_version_index = loader_versions.index(recommended)
 
-    selected_version_index = console.get_response_iterable(loader_versions, default_version_index + 1, get_text) - 1
-    selected_loader_version, download_url = tuple(loader_version_urls.items())[selected_version_index]
+    selected_loader_version_index = loader_versions.index(args.game_version) if args.forge_loader_version is not None else default_loader_version_index
+    _, download_url = tuple(loader_version_urls.items())[selected_loader_version_index]
 
-    xms, xmx = server.ask_memory()
-    server.show_server_info(f"Software: Forge\nGame Version: {selected_game_version}\nLoader Version: {selected_loader_version}\n", xms, xmx)
-    path = server.ask_server_path()
+    xmx = args.xmx
+    xms = args.xms or xmx
+    # server.show_server_info(f"Software: Forge\nGame Version: {selected_game_version}\nLoader Version: {selected_loader_version}\n", xms, xmx)
+    console.print(" Done\n")
 
-    with connect_with(constants.FORGE_MAVEN_DOMAIN) as maven_con:
-        installer_jar = download(maven_con, download_url, path)
+    console.print("\rDownloading server jar file...")
+    connection_maven = connect_maven()
+    installer_jar = download(connection_maven, download_url, path)
+    connection_maven.close()
+    console.print(" Done\n")
 
-    system("cls")
+    console.print("\rInstalling server...\n")
     install(installer_jar, path)
+    console.print("\rInstalling server... Done\n")
+
+    console.print("\rWriting batch file...")
 
     vanilla_format_version = to_vanilla_format(selected_game_version)
 
@@ -121,16 +116,23 @@ def cli():
     if int(selected_game_version.split(".", 2)[1]) >= 17:
         edit_jvm_args(path, f"{server.jvm_args.xms(xms) if xms > 0 else ""} {server.jvm_args.xmx(xmx)}")
         if nogui:
-            with open(f"{path}/run.bat") as bat:
+            batch_path = path_join(path, "run.bat")
+            with open(batch_path, "r") as bat:
                 content = bat.read().replace("%*", "%* nogui")
-            with open(f"{path}/run.bat", "w") as bat:
+            with open(batch_path, "w") as bat:
                 bat.write(content)
     else:
-        server.write_run_batch(path, xms, xmx, f"minecraft_server.{vanilla_format_version}.jar", True)
+        server.write_batch(path, xms, xmx, f"minecraft_server.{vanilla_format_version}.jar", True)
 
-    # Check if version needs EULA
-    vanilla_connection = vanilla.connect()
-    manifest = vanilla.get_version_manifest(vanilla_connection)
-    vanilla_connection.close()
-    selected_game_version_released = tuple(filter(lambda x: x["id"] == vanilla_format_version, manifest["versions"]))[0]["releaseTime"]
-    server.launch_server(path, datetime.fromisoformat(selected_game_version_released))
+    console.print(" Done\n")
+
+    if args.agree_eula:
+        vanilla_connection = vanilla.connect()
+        manifest = vanilla.get_version_manifest(vanilla_connection)
+        vanilla_connection.close()
+        selected_game_version_released = tuple(filter(lambda x: x["id"] == vanilla_format_version, manifest["versions"]))[0]["releaseTime"]
+        if server.is_need_eula(datetime.fromisoformat(selected_game_version_released)):
+            server.write_eula(path)
+
+    if args.launch:
+        server.launch(path)
